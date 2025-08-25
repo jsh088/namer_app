@@ -1,10 +1,12 @@
 import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-//  import 'package:flutter_riverpod/flutter_riverpod.dart';
+//import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+final counterProvider = StateProvider<int>((ref) => 0);
 
 void main() {
-  runApp(MyApp());
+  runApp(ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -25,26 +27,59 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class MyAppState extends ChangeNotifier {
-  var current = WordPair.random();
+class MyAppState extends StateNotifier<MyAppStateData> {
+  MyAppState() : super(MyAppStateData());
+  // class MyAppState extends ChangeNotifier {
+  //   var current = WordPair.random();
 
-  // ↓ Add this.
   void getNext() {
-    current = WordPair.random();
-    notifyListeners();
+    state = state.copyWith(current: WordPair.random());
+    //   current = WordPair.random();
+    //   notifyListeners();
   }
 
   var favorites = <WordPair>[];
-
   void toggleFavorite() {
-    if (favorites.contains(current)) {
-      favorites.remove(current);
+    final favorites = List<WordPair>.from(state.favorites);
+    if (favorites.contains(state.current)) {
+      favorites.remove(state.current);
     } else {
-      favorites.add(current);
+      favorites.add(state.current);
     }
-    notifyListeners();
+    state = state.copyWith(favorites: favorites);
+  }
+
+  // void toggleFavorite() {
+  //   if (favorites.contains(current)) {
+  //     favorites.remove(current);
+  //   } else {
+  //     favorites.add(current);
+  //   }
+  //   notifyListeners();
+  // }
+}
+
+class MyAppStateData {
+  final WordPair current;
+  final List<WordPair> favorites;
+
+  MyAppStateData({WordPair? current, List<WordPair>? favorites})
+    : current = current ?? WordPair.random(),
+      favorites = favorites ?? [];
+
+  MyAppStateData copyWith({WordPair? current, List<WordPair>? favorites}) {
+    return MyAppStateData(
+      current: current ?? this.current,
+      favorites: favorites ?? this.favorites,
+    );
   }
 }
+
+final appStateProvider = StateNotifierProvider<MyAppState, MyAppStateData>((
+  ref,
+) {
+  return MyAppState();
+});
 
 class MyHomePage extends StatefulWidget {
   @override
@@ -108,18 +143,16 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 }
 
-class GeneratorPage extends StatelessWidget {
+class GeneratorPage extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    var appState = ref.watch(appStateProvider);
+    var notifier = ref.read(appStateProvider.notifier);
     var pair = appState.current;
 
-    IconData icon;
-    if (appState.favorites.contains(pair)) {
-      icon = Icons.favorite;
-    } else {
-      icon = Icons.favorite_border;
-    }
+    IconData icon = appState.favorites.contains(pair)
+        ? Icons.favorite
+        : Icons.favorite_border;
 
     return Center(
       child: Column(
@@ -132,7 +165,7 @@ class GeneratorPage extends StatelessWidget {
             children: [
               ElevatedButton.icon(
                 onPressed: () {
-                  appState.toggleFavorite();
+                  notifier.toggleFavorite();
                 },
                 icon: Icon(icon),
                 label: Text('Like'),
@@ -140,7 +173,7 @@ class GeneratorPage extends StatelessWidget {
               SizedBox(width: 10),
               ElevatedButton(
                 onPressed: () {
-                  appState.getNext();
+                  notifier.getNext();
                 },
                 child: Text('Next'),
               ),
@@ -178,10 +211,11 @@ class BigCard extends StatelessWidget {
   }
 }
 
-class FavoritesPage extends StatelessWidget {
+class FavoritesPage extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    var appState = ref.watch(appStateProvider);
+    //var favorites = ref.read(appStateProvider.favorites);
 
     if (appState.favorites.isEmpty) {
       return Center(child: Text('No favorites yet.'));
